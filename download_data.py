@@ -8,9 +8,20 @@ import io
 from urllib.parse import urljoin
 import zipfile
 
+
+#########
+# Input #
+#########
+
 data_base_url = "https://divvy-tripdata.s3.amazonaws.com/"
 start_month = "2022_01"
 end_month = "2022_12"
+data_csv_path = "data.csv"
+
+
+#################
+# Download data #
+#################
 
 months = pandas.date_range(
     start=datetime.datetime.strptime(start_month, "%Y_%m"),
@@ -20,7 +31,7 @@ months = pandas.date_range(
 
 file_names = [f"{datetime.datetime.strftime(month, '%Y%m')}-divvy-tripdata" for month in months]
 
-data = list()
+data = pandas.DataFrame()
 for file_name in tqdm.tqdm(file_names):
     response = requests.get(urljoin(data_base_url, f"{file_name}.zip"), allow_redirects=True)
     # ZipFile object accepts file-like objects
@@ -31,7 +42,6 @@ for file_name in tqdm.tqdm(file_names):
         if f"{file_name}.csv" not in zip_file_names:
             file_name = file_name.replace("tripdata", "publictripdata")
         with data_zipfile.open(f"{file_name}.csv") as data_raw_csv:
-            data += [pandas.read_csv(data_raw_csv)]
+            data = pandas.concat([data, pandas.read_csv(data_raw_csv)])
 
-data_df = pandas.concat(data)
-
+data.to_csv(data_csv_path, index=False)
