@@ -1,7 +1,23 @@
+# external
+import numpy
 import pandas
+import plotly.graph_objects
+import plotly.subplots
+# local
+import general
+
+
+###############
+# Import data #
+###############
 
 data_csv_path = "data.csv"
 data = pandas.read_csv(data_csv_path)
+
+
+##########################
+# Analyze missing values #
+##########################
 
 # Columns with missing values:
 missing_value_columns = data.isnull().any(axis="index")
@@ -9,86 +25,96 @@ missing_value_columns = data.isnull().any(axis="index")
 # Rows with missing values
 missing_value_rows = data[data.isnull().any(axis="columns")]
 
+# Rows with missing end location
+missing_end_coordinates = data[data[["end_lat", "end_lng"]].isnull().any(axis="columns")]
 
-################################
-# Check for recoverable values #
-################################
-
-# Rounding to 3 decimal places gives ~50 m precision
-coordinates_rounding_precision = 3
-
-# Pivot longer
-start_columns = [
-    "ride_id",
-    "rideable_type",
-    "member_casual",
-    "started_at",
-    "start_station_name",
-    "start_station_id",
-    "start_lat",
-    "start_lng"]
-
-end_columns = [
-    "ride_id",
-    "rideable_type",
-    "member_casual",
-    "ended_at",
-    "end_station_name",
-    "end_station_id",
-    "end_lat",
-    "end_lng"]
-
-data_start = (
-    data
-        .loc[:, start_columns]
-        .rename(columns={col_name: col_name.replace("start_", "") for col_name in start_columns})
-        .rename(columns={"started_at": "time"}))
-data_start["start_end"] = "start"
-
-data_end = (
-    data
-        .loc[:, end_columns]
-        .rename(columns={col_name: col_name.replace("end_", "") for col_name in end_columns})
-        .rename(columns={"ended_at": "time"}))
-data_end["start_end"] = "end"
-
-data_tidy = pandas.concat([data_start, data_end])
-
-# Combine coordinates
-data_tidy.insert(
-        loc=7,
-        column="coordinates",
-        value=[(round(latitude, coordinates_rounding_precision), round(longitude, coordinates_rounding_precision))
-               for latitude, longitude in zip(data_tidy["lat"], data_tidy["lng"])])
-
-data_tidy = (
-    data_tidy
-        .drop(["lat", "lng"], axis="columns")
-        .sort_values(by=["ride_id", "time"])
-)
-
-# Get station coordinates
-locations_reference = (
-    data_tidy
-        .loc[:, ["station_name", "station_id", "coordinates"]]
-        .dropna(subset="station_name")
-        .drop_duplicates()
-        .sort_values("station_name"))
+# ...
+# Somehow some durations come up negative
 
 
+##############################################
+# Analyze member and casual user differences #
+##############################################
+
+# Add ride durations
+data[["started_at", "ended_at"]] = data[["started_at", "ended_at"]].astype("datetime64[ns]")
+data["duration_minutes"] = [round(timedelta.total_seconds() / 60, 2) for timedelta in data["ended_at"] - data["started_at"]]
+
+# Add hour of day
+data["start_hour"] = [dt.hour for dt in data["started_at"]]
+
+# Add ride direct distances
+data["direct_distance_km"] = [round(x, 2) for x in map(general.haversine_distance, data["start_lat"], data["start_lng"], data["end_lat"], data["end_lng"])]
+
+# Add speed
+data["direct_speed_m_s"] = [round(x, 2) for x in data["direct_distance_km"] * 1000 / data["duration_minutes"] / 60]
 
 
-################################## Join values and keep ones where they replace None values
-data_tidy.join()
+##########################
+# Ride duration analysis #
+##########################
 
+members_ride_duration = data.query("member_casual == 'member'")["duration_minutes"]
+casual_ride_duration = data.query("member_casual == 'casual'")["duration_minutes"]
 
-start_station_recoverable = (
-    (data_tidy["start_station_name"].isna() | data_tidy["start_station_id"].isna()) &
-    data_tidy["start_coordinates"].isin(locations_reference["coordinates"]))
+# Pdfs
+n_bins = 10000
+casual_histogram = numpy.histogram(casual_ride_duration, bins=n_bins, density=True)
+members_histogram = numpy.histogram(members_ride_duration, bins=n_bins, density=True)
 
-end_station_recoverable = (
-    (data_tidy["end_station_name"].isna() | data_tidy["end_station_id"].isna()) &
-    data_tidy["end_coordinates"].isin(locations_reference["coordinates"]))
+casual_pdf_plot = plotly.graph_objects.Scatter(
+    x=casual_histogram[1],
+    y=casual_histogram[0],
+    mode="lines",
+    name="casual",
+    line=dict(
+        color="firebrick"))
 
-data_tidy[start_station_recoverable]
-data_tidy[end_station_recoverable]
+casual_interquantile_range = casual_ride_duration.quantile(0.75) - casual_ride_duration.quantile(0.25)
+casual_outliers_cutoffs = (
+    casual_ride_duration.quantile(0.25) - 1.5 * casual_interquantile_range,
+    casual_ride_duration.quantile(0.75) + 1.5 * casual_interquantile_range)
+
+members_pdf_plot = plotly.graph_objects.Scatter(
+    x=members_histogram[1],
+    y=members_histogram[0],
+    mode="lines",
+    name="members",
+    line=dict(
+        color="royalblue"))
+
+members_interquantile_range = members_ride_duration.quantile(0.75) - members_ride_duration.quantile(0.25)
+members_outliers_cutoffs = (
+    members_ride_duration.quantile(0.25) - 1.5 * members_interquantile_range,
+    members_ride_duration.quantile(0.75) + 1.5 * members_interquantile_range)
+
+pdf_plot_figure = plotly.subplots.make_subplots(
+    rows=2,
+    cols=1,
+    shared_xaxes=True)
+
+pdf_plot_figure.add_trace(casual_pdf_plot, row=1, col=1)
+pdf_plot_figure.add_vrect(
+    x0=casual_outliers_cutoffs[0],
+    x1=casual_outliers_cutoffs[1],
+    fillcolor="firebrick",
+    opacity=0.2,
+    line_width=0,
+    row=1,
+    col=1)
+
+pdf_plot_figure.add_trace(members_pdf_plot, row=2, col=1)
+pdf_plot_figure.add_vrect(
+    x0=members_outliers_cutoffs[0],
+    x1=members_outliers_cutoffs[1],
+    fillcolor="royalblue",
+    opacity=0.2,
+    line_width=0,
+    row=2,
+    col=1)
+
+pdf_plot_figure.write_html("pdf_outliers.html")
+
+#############################################################
+# Missing values analysis
+# Mann-Whitney to test if casual and subscribed customers differ

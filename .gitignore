@@ -1,5 +1,6 @@
-# Temporary data file
+# Temporary data files
 data.csv
+*.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
