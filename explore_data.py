@@ -2,6 +2,8 @@
 import pandas
 import plotly.graph_objects
 import plotly.subplots
+import scipy.stats
+import tqdm
 # local
 import general
 import plotting
@@ -13,6 +15,14 @@ import plotting
 
 data_csv_path = "data.csv"
 data = pandas.read_csv(data_csv_path)
+
+members = dict(
+    name="members",
+    color="royalblue")
+
+casual = dict(
+    name="casual",
+    color="firebrick")
 
 
 ##########################
@@ -51,54 +61,118 @@ data["direct_speed_m_s"] = [round(x, 2) for x in data["direct_distance_km"] * 10
 # Ride duration analysis #
 ##########################
 
-members = dict(
-    name="members",
-    color="royalblue")
+ride_duration_members_raw = data.query("member_casual == 'member'")["duration_minutes"]
+ride_duration_casual_raw = data.query("member_casual == 'casual'")["duration_minutes"]
 
-casual = dict(
-    name="casual",
-    color="firebrick")
-
-ride_duration_members = data.query("member_casual == 'member'")["duration_minutes"]
-ride_duration_casual = data.query("member_casual == 'casual'")["duration_minutes"]
 
 # Plot probability density functions (PDFs) with proposed cutoffs
-ride_duration_members_cutoffs = (0, ride_duration_members.quantile(0.99))
-ride_duration_casual_cutoffs = (0, ride_duration_casual.quantile(0.99))
+ride_duration_members_cutoffs = (0, ride_duration_members_raw.quantile(0.99))
+ride_duration_casual_cutoffs = (0, ride_duration_casual_raw.quantile(0.99))
 
-pdf_figure = plotly.subplots.make_subplots(
+pdf_raw_figure = plotly.subplots.make_subplots(
     rows=2,
     cols=1,
     shared_xaxes=True)
 
-ride_duration_members_pdf = general.get_pdf_values(ride_duration_members)
-pdf_figure = plotting.add_pdf_plot(
-    figure=pdf_figure,
-    x_values=ride_duration_members_pdf[0],
-    y_values=ride_duration_members_pdf[1],
+ride_duration_members_pdf_raw = general.get_pdf_values(ride_duration_members_raw)
+pdf_raw_figure = plotting.add_pdf_plot(
+    figure=pdf_raw_figure,
+    x_values=ride_duration_members_pdf_raw[0],
+    y_values=ride_duration_members_pdf_raw[1],
     color=members["color"],
     cutoffs=ride_duration_members_cutoffs,
     legend_name=members["name"],
     subplot_row=1,
     subplot_column=1)
 
-ride_duration_casual_pdf = general.get_pdf_values(ride_duration_casual)
-pdf_figure = plotting.add_pdf_plot(
-    figure=pdf_figure,
-    x_values=ride_duration_casual_pdf[0],
-    y_values=ride_duration_casual_pdf[1],
+ride_duration_members_pdf_raw = general.get_pdf_values(ride_duration_casual_raw)
+pdf_raw_figure = plotting.add_pdf_plot(
+    figure=pdf_raw_figure,
+    x_values=ride_duration_members_pdf_raw[0],
+    y_values=ride_duration_members_pdf_raw[1],
     color=casual["color"],
     cutoffs=ride_duration_casual_cutoffs,
     legend_name=casual["name"],
     subplot_row=2,
     subplot_column=1)
 
-pdf_figure.write_html("ride_duration_pdf.html")
+pdf_raw_figure.write_html("ride_duration_raw_pdf.html")
 
-# Somehow some durations come up negative
-# Will just filter these out
+
+# Remove outliers
+# Somehow some durations come up negative - will just filter these out
 ride_duration_negative = data.query("duration_minutes < 0")
 
-#############################################################
-# Missing values analysis
-# Mann-Whitney to test if casual and subscribed customers differ
+ride_duration_members = ride_duration_members_raw.loc[lambda x: (x >= ride_duration_members_cutoffs[0]) & (x <= ride_duration_members_cutoffs[1])]
+ride_duration_casual = ride_duration_casual_raw.loc[lambda x: (x >= ride_duration_casual_cutoffs[0]) & (x <= ride_duration_casual_cutoffs[1])]
+
+
+# Plot without outliers
+pdf_figure = plotly.subplots.make_subplots(
+    rows=2,
+    cols=1,
+    shared_xaxes=True)
+
+ride_duration_members_pdf = general.get_pdf_values(ride_duration_members)
+ride_duration_casual_pdf = general.get_pdf_values(ride_duration_casual)
+
+ride_duration_members_pdf_plot = plotly.graph_objects.Scatter(
+    x=ride_duration_members_pdf[0],
+    y=ride_duration_members_pdf[1],
+    mode="lines",
+    name=members["name"],
+    line=dict(
+        color=members["color"]))
+
+ride_duration_casual_pdf_plot = plotly.graph_objects.Scatter(
+    x=ride_duration_casual_pdf[0],
+    y=ride_duration_casual_pdf[1],
+    mode="lines",
+    name=casual["name"],
+    line=dict(
+        color=casual["color"]))
+
+ride_duration_members_box_plot = plotly.graph_objects.Box(
+    x=ride_duration_members.sample(10000),
+    name=members["name"],
+    line=dict(
+        color=members["color"]))
+
+ride_duration_casual_box_plot = plotly.graph_objects.Box(
+    x=ride_duration_casual.sample(10000),
+    name=casual["name"],
+    line=dict(
+        color=casual["color"]))
+
+pdf_figure.add_traces([ride_duration_members_pdf_plot, ride_duration_casual_pdf_plot], rows=1, cols=1)
+pdf_figure.add_traces([ride_duration_members_box_plot, ride_duration_casual_box_plot], rows=2, cols=1)
+
+pdf_figure.write_html("ride_duration_pdf.html")
+
+
+# Determine if member and casual distributions are different
+# Using Mann-Whitney U test
+ride_duration_mann_whitney_u_test = scipy.stats.mannwhitneyu(ride_duration_members, ride_duration_casual)
+ride_duration_p_value = ride_duration_mann_whitney_u_test[1]
+
+
+# Bootstrap to simulate change in ride duration if 10% more users are members
+conversion_rate = 0.1
+n_new_members_converted = int(conversion_rate * len(ride_duration_members))
+ride_duration_actual_total = ride_duration_members_raw.sum() + ride_duration_casual_raw.sum()
+
+n_bootstraps = 1000
+ride_duration_simulated_totals = list()
+for _ in tqdm.tqdm(range(n_bootstraps)):
+    ride_duration_members_simulated = pandas.concat([ride_duration_members_raw, ride_duration_members_raw.sample(n_new_members_converted, replace=True)])
+    ride_duration_casual_simulated = ride_duration_casual_raw.sample(len(ride_duration_casual_raw) - n_new_members_converted)
+    ride_duration_simulated_total = ride_duration_members_simulated.sum() + ride_duration_casual_simulated.sum()
+    ride_duration_simulated_totals += [ride_duration_simulated_total]
+
+ride_duration_simulation_differences = ride_duration_simulated_totals - ride_duration_actual_total
+
+simulation_figure = plotly.graph_objects.Figure()
+simulation_histogram = plotly.graph_objects.Histogram(x=ride_duration_simulation_differences)
+simulation_figure.add_trace(simulation_histogram)
+
+simulation_figure.write_html("ride_duration_simulation.html")
