@@ -36,6 +36,8 @@ Cutoffs at 0 minutes and 99th percentile seems good for ride duration.
 
 Might be a good idea to generalize the function for creating pdf plots with cutoffs.
 
+Try to use the same cutoff for both - the maximum of the two
+
 ## Testing distribution difference
 It seems that with big enough sample sizes, Mann-Whitney gives a tiny p-value.
 I.e. should reject the null-hypothesis that the distributions are the same.
@@ -53,3 +55,6 @@ random.choices can't be used on a pandas Series. Pandas has its own random choic
 It seems that average minutes go down for members. Not sure if it's causal.
 It would help to know how many rides are by the same persons. I.e. do people start riding more often once they become members.
 Could make a graph for what are the values of member engagement that would be worthwhile converting someone to a member.
+
+## Plotting
+Change subplots sizes - box plot hight lower

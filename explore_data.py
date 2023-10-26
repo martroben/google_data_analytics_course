@@ -66,8 +66,10 @@ ride_duration_casual_raw = data.query("member_casual == 'casual'")["duration_min
 
 
 # Plot probability density functions (PDFs) with proposed cutoffs
-ride_duration_members_cutoffs = (0, ride_duration_members_raw.quantile(0.99))
-ride_duration_casual_cutoffs = (0, ride_duration_casual_raw.quantile(0.99))
+lower_cutoff = 0
+upper_cutoff = max(ride_duration_members_raw.quantile(0.99), ride_duration_casual_raw.quantile(0.99))
+ride_duration_members_cutoffs = (lower_cutoff, upper_cutoff)
+ride_duration_casual_cutoffs = (lower_cutoff, upper_cutoff)
 
 pdf_raw_figure = plotly.subplots.make_subplots(
     rows=2,
@@ -111,7 +113,9 @@ ride_duration_casual = ride_duration_casual_raw.loc[lambda x: (x >= ride_duratio
 pdf_figure = plotly.subplots.make_subplots(
     rows=2,
     cols=1,
-    shared_xaxes=True)
+    shared_xaxes=True,
+    row_heights=(0.8, 0.2),
+    vertical_spacing=0.05)
 
 ride_duration_members_pdf = general.get_pdf_values(ride_duration_members)
 ride_duration_casual_pdf = general.get_pdf_values(ride_duration_casual)
