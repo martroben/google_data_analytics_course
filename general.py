@@ -38,3 +38,23 @@ def trim_for_boxplot(values: pandas.core.series.Series | list, length: int = 100
         random.sample(values[n_tail_values:-n_tail_values], n_values_to_keep - 2 * n_tail_values) + 
         values[-n_tail_values:])
     return values_to_keep
+
+
+def get_pdf_values(values: list | pandas.core.series.Series) -> tuple[numpy.ndarray, numpy.ndarray]:
+    """
+    Get numpy histogram with resolution based on interquantile range.
+    Used to plot a probability density function (PDF)
+    First value in return tuple gives the edges of bins (PDF x values).
+    Second value in return tuple gives the number of data points in each bin (PDF y values).
+    """
+    # Set resolution
+    n_bins_in_interquantile_range = 50
+
+    values = pandas.Series(values)
+    values_range = values.max() - values.min()
+    values_interquantile_range = values.quantile(0.75) - values.quantile(0.25)
+
+    n_bins = int(values_range / (values_interquantile_range / n_bins_in_interquantile_range))
+    histogram = numpy.histogram(values, bins=n_bins, density=True)
+
+    return (histogram[1], histogram[0])
