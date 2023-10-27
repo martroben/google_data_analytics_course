@@ -1,4 +1,7 @@
+# standard
+import os
 # external
+import geojson
 import pandas
 import plotly.graph_objects
 import plotly.subplots
@@ -12,6 +15,11 @@ import plotting
 ###############
 # Import data #
 ###############
+
+env_file_path = ".env"
+_ = general.parse_input_file(
+    path=env_file_path,
+    set_environmental_variables=True)
 
 data_csv_path = "data.csv"
 data = pandas.read_csv(data_csv_path)
@@ -180,3 +188,49 @@ simulation_histogram = plotly.graph_objects.Histogram(x=ride_duration_simulation
 simulation_figure.add_trace(simulation_histogram)
 
 simulation_figure.write_html("ride_duration_simulation.html")
+
+
+# Plotting over a map
+coordinate_boundaries = ((data["start_lat"].max(), data["start_lng"].min()), (data["start_lat"].min(), data["start_lng"].max()))
+
+mapbox_token = os.getenv("mapbox_token")
+
+fig = plotly.graph_objects.Figure(plotly.graph_objects.Scattermapbox(
+        lat=['45.5017'],
+        lon=['-73.5673'],
+        mode='markers',
+        marker=plotly.graph_objects.scattermapbox.Marker(
+            size=14
+        ),
+        text=['Montreal'],
+    ))
+
+fig.update_layout(
+    hovermode='closest',
+    mapbox=dict(
+        accesstoken=mapbox_token,
+        bearing=0,
+        center=plotly.graph_objects.layout.mapbox.Center(
+            lat=45,
+            lon=-73
+        ),
+        pitch=0,
+        zoom=5
+    )
+)
+
+fig.write_html("map.html")
+
+
+# geojson
+test_polygon = geojson.Polygon([[(100, 0), (101, 0), (101, 1), (100, 1), (100, 0)]])
+test_feature = geojson.Feature(geometry=test_polygon, properties={"row_column": "1_1"})
+test_featurecollection = geojson.FeatureCollection([test_feature])
+test_featurecollection.errors()
+
+
+# Started rides by station
+testplot = plotly.graph_objects.Figure(plotly.graph_objects.Bar(x=data["start_station_id"].value_counts().index[:50], y=data["start_station_id"].value_counts()[:50]))
+testplot.write_html("test.html")
+
+len(set(data["start_station_id"]))

@@ -1,30 +1,136 @@
-# 2023-10-25
-## Ride duration analysis
-tried creating a boxplot with all points - too much to handle for the computer
+# 2023-10-27
+## More ride duration analysis
+Plot starting station coordinates and indicate with color, where the longest rides are started from.
+Average coordinates to 2 decimal places (~1 km precision).
+Compare with direct distance coordinates. Maybe indicates, which locations need more electric bikes?
 
-tried creating a function to select only 100 outliers + random values from all others.
-The selection was very uneven - it looked like outliers start from some specific value
+## Plotting over a map
+Can use Plotly scattergeo, but by default it only supports locations up to US states:
+https://plotly.com/python/reference/#scattergeo-locationmode
 
-Tried to use a histogram - only has a massive peak in the middle. Have to remove outliers to get a better picture.
+Maybe use square grid with different alphas over a map. Or draw only squares that have more than a threshold of ride starts
+Square size - half or third of median ride distance.
+Apparently latitude decreases from north to south
 
-Tried using standard deviation to remove outliers fallin outside some multiple of std deviations.
-Because of outliers, the standard deviation is really stretched out for one group.
+## Mapbox
+Seems that using Mapbox can give better precision.
+https://plotly.com/python/reference/#scattermapbox
+https://plotly.com/python/mapbox-density-heatmaps/
+https://plotly.github.io/plotly.py-docs/generated/plotly.graph_objects.Densitymapbox.html - might be the correct option - still uses points though
+https://python-charts.com/spatial/choropleth-map-plotly/ - probably the correct option - needs some geojson coordinates as input
+https://plotly.com/python/mapbox-layers/
+Might need token: https://docs.mapbox.com/help/glossary/access-token/ - yes, using default public token
 
-Should use median and interquartile range. By default [Q(0.25) - 1.5 * IQR, Q(0.75) + 1.5 * IQR]  is used.
-Maybe I should try to use some better way to find the cutoff point. E.g. find highest derivate between some percentiles.
-Too much experimentation - settle with PDF with a rectangle showing the cutoffs for now.
+The default Mapbox style requires an API token in order to work, so if you don’t have one you will need to specify any of the styles that not require an API token, which are: ‘open-street-map’, ‘white-bg’, ‘carto-positron’, ‘carto-darkmatter’, ‘stamen-terrain’, ‘stamen-toner’ and ‘stamen-watercolor’.
 
-Visually the 1.5*iqr cutoff discards too much data. Let's try cutting off at a value where PDF passes through 0.01.
-Problematic, because the value depends on number of histogram bins (i.e. the resolution of the pdf).
-If we increase resolution, the cutoff changes.
-Also problematic, because one of the series has really big outliers, so it needs a finer resolution to get good cutoff location.
-That means the cutoff can't be the same for both series.
 
-Try making the cutoff some proportion of maximum. Also maybe make number of bins dependent on range.
+### Chorepleth map
+https://plotly.com/python/mapbox-county-choropleth/ - doesn't need token?
 
-## Negative durations
-Don't see any reason or pattern in these values. Will just drop the values.
-Might have to investigate later if there is any correlation in the dropped values with other variables.
+
+#### Geojson
+example: https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json
+https://geojson.org/
+spec: https://datatracker.ietf.org/doc/html/rfc7946
+
+You will also need to set featureidkey to the geojson identifier (defaults to id and in other case takes the form properties.<key>)
+which matches the column name passed to locations.
+
+General geojson file structure
+
+**Feature Object**
+
+   A Feature object represents a spatially bounded thing.  Every Feature
+   object is a GeoJSON object no matter where it occurs in a GeoJSON
+   text.
+
+   o  A Feature object has a "type" member with the value "Feature".
+
+   o  A Feature object has a member with the name "geometry".  The value
+      of the geometry member SHALL be either a Geometry object as
+      defined above or, in the case that the Feature is unlocated, a
+      JSON null value.
+
+   o  A Feature object has a member with the name "properties".  The
+      value of the properties member is an object (any JSON object or a
+      JSON null value).
+
+   o  If a Feature has a commonly used identifier, that identifier
+      SHOULD be included as a member of the Feature object with the name
+      "id", and the value of this member is either a JSON string or
+      number.
+
+```json
+{
+    "type": "FeatureCollection",
+    "features": [
+        {"type":
+            "Feature",
+            "properties": {"GEO_ID": "0500000US01083", "STATE": "01", ...},
+            "geometry":
+                {"type": "Polygon",
+                "coordinates": [[ [-86.836306, 34.991764], [-86.820657, 34.991764], [-86.783648, 34.991925], ...]]},
+            "id": "01083"},
+        ...
+    ]
+}
+```
+
+**Polygon**
+
+   To specify a constraint specific to Polygons, it is useful to
+   introduce the concept of a linear ring:
+
+   o  A linear ring is a closed LineString with four or more positions.
+
+   o  The first and last positions are equivalent, and they MUST contain
+      identical values; their representation SHOULD also be identical.
+
+   o  A linear ring is the boundary of a surface or the boundary of a
+      hole in a surface.
+
+   o  A linear ring MUST follow the right-hand rule with respect to the
+      area it bounds, i.e., exterior rings are counterclockwise, and
+      holes are clockwise.
+
+   o  For type "Polygon", the "coordinates" member MUST be an array of
+      linear ring coordinate arrays.
+
+```json
+{
+    "type": "Feature",
+    "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [100.0, 0.0],
+                [101.0, 0.0],
+                [101.0, 1.0],
+                [100.0, 1.0],
+                [100.0, 0.0]
+            ]
+        ]
+    },
+    "properties": {
+        "prop0": "value0",
+        "prop1": {
+            "this": "that"
+        }
+    }
+}
+```
+
+**Coordinates**
+
+The first two elements are longitude and latitude, or
+   easting and northing, precisely in that order and using decimal
+   numbers.
+
+
+**Geojson library**
+
+https://pypi.org/project/geojson/
+
 
 
 # 2023-10-26
@@ -58,3 +164,41 @@ Could make a graph for what are the values of member engagement that would be wo
 
 ## Plotting
 Change subplots sizes - box plot hight lower
+
+## Analysis by stations and bike types
+Find the most popular stations.
+Get time series of proportion of electric bikes rented for every hour. 
+Might show that there are periods with no electric bikes available.
+
+## Analysis by area
+Check if member rides correlate with coordinates. Maybe there are areas where more focus is needed.
+
+
+
+# 2023-10-25
+## Ride duration analysis
+tried creating a boxplot with all points - too much to handle for the computer
+
+tried creating a function to select only 100 outliers + random values from all others.
+The selection was very uneven - it looked like outliers start from some specific value
+
+Tried to use a histogram - only has a massive peak in the middle. Have to remove outliers to get a better picture.
+
+Tried using standard deviation to remove outliers fallin outside some multiple of std deviations.
+Because of outliers, the standard deviation is really stretched out for one group.
+
+Should use median and interquartile range. By default [Q(0.25) - 1.5 * IQR, Q(0.75) + 1.5 * IQR]  is used.
+Maybe I should try to use some better way to find the cutoff point. E.g. find highest derivate between some percentiles.
+Too much experimentation - settle with PDF with a rectangle showing the cutoffs for now.
+
+Visually the 1.5*iqr cutoff discards too much data. Let's try cutting off at a value where PDF passes through 0.01.
+Problematic, because the value depends on number of histogram bins (i.e. the resolution of the pdf).
+If we increase resolution, the cutoff changes.
+Also problematic, because one of the series has really big outliers, so it needs a finer resolution to get good cutoff location.
+That means the cutoff can't be the same for both series.
+
+Try making the cutoff some proportion of maximum. Also maybe make number of bins dependent on range.
+
+## Negative durations
+Don't see any reason or pattern in these values. Will just drop the values.
+Might have to investigate later if there is any correlation in the dropped values with other variables.
