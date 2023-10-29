@@ -1,3 +1,18 @@
+# 2023-10-29
+## Plotting geojson
+Apparently geojson Featurecollection objects can be used directly in plotly.graph_objects.Choroplethmapbox geojson attribute.
+Coordinate boundaries seem quite weird for the data set (no major cities - maybe Toronto?).
+Somehow the individual coordinates are still in Chicago - probably made some mistake with plotting initially.
+
+mapbox_style="carto-positron" doesn't require mapbox license.
+
+Can't figure out a way to plot geojson points with choroplet mapbox.
+
+Apparently 0.01 units of latitude and 0.01 units of longitude are not the same distance (doesn't make a square).
+
+Have to figure out the range of coordinates and outliers to get a good grid size.
+
+
 # 2023-10-27
 ## More ride duration analysis
 Plot starting station coordinates and indicate with color, where the longest rides are started from.

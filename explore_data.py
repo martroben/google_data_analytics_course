@@ -190,8 +190,81 @@ simulation_figure.add_trace(simulation_histogram)
 simulation_figure.write_html("ride_duration_simulation.html")
 
 
+
+test_points = data[["start_lng", "start_lat"]][:100]
+test_points["row_column"] = list(range(100))
+test_points["ride_duration"] = 10
+
+geojson_features = list()
+for i, row in test_points.iterrows():
+    geojson_polygon = geojson.Polygon([[
+        (row["start_lng"], row["start_lat"]),
+        (row["start_lng"] + 0.01, row["start_lat"]),
+        (row["start_lng"] + 0.01, row["start_lat"] + 0.01),
+        (row["start_lng"], row["start_lat"] + 0.01),
+        (row["start_lng"], row["start_lat"])]])
+    geojson_feature = geojson.Feature(
+        geometry=geojson_polygon,
+        properties={"row_column": row["row_column"]})
+    geojson_features += [geojson_feature]
+
+geojson_featurecollection = geojson.FeatureCollection(geojson_features)
+
+fig = plotly.graph_objects.Figure(
+    plotly.graph_objects.Choroplethmapbox(
+        geojson=geojson_featurecollection,
+        locations=test_points.row_column,
+        featureidkey="properties.row_column",
+        z=test_points.ride_duration,
+        colorscale="Viridis",
+        zmin=0,
+        zmax=12,
+        marker_opacity=0.5,
+        marker_line_width=0))
+
+fig.update_layout(
+    mapbox_style="carto-positron",
+    mapbox_zoom=8,
+    mapbox_center = {"lat": 42.012, "lon": -87.665})
+
+fig.write_html("map.html")
+
+
+
 # Plotting over a map
-coordinate_boundaries = ((data["start_lat"].max(), data["start_lng"].min()), (data["start_lat"].min(), data["start_lng"].max()))
+coordinate_boundaries = ((data["start_lng"].min(),  data["start_lat"].min()), (data["start_lng"].max(), data["start_lat"].max(), ))
+# geojson
+test_polygon1 = geojson.Polygon([[(-87, 41), (-80, 41), (-80, 46), (-87, 46), (-87, 41)]])
+test_polygon2 = geojson.Polygon([[(-80, 41), (-73, 41), (-73, 46), (-80, 46), (-80, 41)]])
+
+
+test_feature1 = geojson.Feature(geometry=test_polygon1, properties={"row_column": "1_1"})
+test_feature2 = geojson.Feature(geometry=test_polygon2, properties={"row_column": "1_2"})
+test_featurecollection = geojson.FeatureCollection([test_feature1, test_feature2])
+test_featurecollection.errors()
+
+test_df = pandas.DataFrame([{"row_column": "1_1", "ride_duration": 10}, {"row_column": "1_2", "ride_duration": 5}])
+
+fig = plotly.graph_objects.Figure(
+    plotly.graph_objects.Choroplethmapbox(
+        geojson=test_featurecollection,
+        locations=test_df.row_column,
+        featureidkey="properties.row_column",
+        z=test_df.ride_duration,
+        colorscale="Viridis",
+        zmin=0,
+        zmax=12,
+        marker_opacity=0.5,
+        marker_line_width=0))
+
+fig.update_layout(
+    mapbox_style="carto-positron",
+    mapbox_zoom=8,
+    mapbox_center = {"lat": 41, "lon": -73})
+
+fig.write_html("map.html")
+
+
 
 mapbox_token = os.getenv("mapbox_token")
 
@@ -222,11 +295,6 @@ fig.update_layout(
 fig.write_html("map.html")
 
 
-# geojson
-test_polygon = geojson.Polygon([[(100, 0), (101, 0), (101, 1), (100, 1), (100, 0)]])
-test_feature = geojson.Feature(geometry=test_polygon, properties={"row_column": "1_1"})
-test_featurecollection = geojson.FeatureCollection([test_feature])
-test_featurecollection.errors()
 
 
 # Started rides by station
