@@ -1,5 +1,3 @@
-# standard
-import os
 # external
 import geojson
 import pandas
@@ -15,11 +13,6 @@ import plotting
 ###############
 # Import data #
 ###############
-
-env_file_path = ".env"
-_ = general.parse_input_file(
-    path=env_file_path,
-    set_environmental_variables=True)
 
 data_csv_path = "data.csv"
 data = pandas.read_csv(data_csv_path)
@@ -59,7 +52,9 @@ data["duration_minutes"] = [round(timedelta.total_seconds() / 60, 2) for timedel
 data["start_hour"] = [dt.hour for dt in data["started_at"]]
 
 # Add ride direct distances
-data["direct_distance_km"] = [round(x, 2) for x in map(general.haversine_distance, data["start_lat"], data["start_lng"], data["end_lat"], data["end_lng"])]
+data["longitude_delta"] = abs(data["start_lng"] - data["end_lng"])
+data["latitude_delta"] = abs(data["start_lat"] - data["end_lat"])
+data["direct_distance_km"] = [round(x, 2) for x in map(general.haversine_distance, data["start_lng"], data["start_lat"], data["end_lng"], data["end_lat"])]
 
 # Add speed
 data["direct_speed_m_s"] = [round(x, 2) for x in data["direct_distance_km"] * 1000 / data["duration_minutes"] / 60]
@@ -190,6 +185,15 @@ simulation_figure.add_trace(simulation_histogram)
 simulation_figure.write_html("ride_duration_simulation.html")
 
 
+# Map grid
+median_deltas = (data
+    .query("longitude_delta > 0 & latitude_delta > 0")
+    .loc[:,["longitude_delta", "latitude_delta"]]
+    .median())
+
+grid_size = (round(median_deltas["longitude_delta"] / 3, 4), round(median_deltas["latitude_delta"] / 3, 4))
+
+
 
 test_points = data[["start_lng", "start_lat"]][:100]
 test_points["row_column"] = list(range(100))
@@ -231,74 +235,3 @@ fig.write_html("map.html")
 
 
 
-# Plotting over a map
-coordinate_boundaries = ((data["start_lng"].min(),  data["start_lat"].min()), (data["start_lng"].max(), data["start_lat"].max(), ))
-# geojson
-test_polygon1 = geojson.Polygon([[(-87, 41), (-80, 41), (-80, 46), (-87, 46), (-87, 41)]])
-test_polygon2 = geojson.Polygon([[(-80, 41), (-73, 41), (-73, 46), (-80, 46), (-80, 41)]])
-
-
-test_feature1 = geojson.Feature(geometry=test_polygon1, properties={"row_column": "1_1"})
-test_feature2 = geojson.Feature(geometry=test_polygon2, properties={"row_column": "1_2"})
-test_featurecollection = geojson.FeatureCollection([test_feature1, test_feature2])
-test_featurecollection.errors()
-
-test_df = pandas.DataFrame([{"row_column": "1_1", "ride_duration": 10}, {"row_column": "1_2", "ride_duration": 5}])
-
-fig = plotly.graph_objects.Figure(
-    plotly.graph_objects.Choroplethmapbox(
-        geojson=test_featurecollection,
-        locations=test_df.row_column,
-        featureidkey="properties.row_column",
-        z=test_df.ride_duration,
-        colorscale="Viridis",
-        zmin=0,
-        zmax=12,
-        marker_opacity=0.5,
-        marker_line_width=0))
-
-fig.update_layout(
-    mapbox_style="carto-positron",
-    mapbox_zoom=8,
-    mapbox_center = {"lat": 41, "lon": -73})
-
-fig.write_html("map.html")
-
-
-
-mapbox_token = os.getenv("mapbox_token")
-
-fig = plotly.graph_objects.Figure(plotly.graph_objects.Scattermapbox(
-        lat=['45.5017'],
-        lon=['-73.5673'],
-        mode='markers',
-        marker=plotly.graph_objects.scattermapbox.Marker(
-            size=14
-        ),
-        text=['Montreal'],
-    ))
-
-fig.update_layout(
-    hovermode='closest',
-    mapbox=dict(
-        accesstoken=mapbox_token,
-        bearing=0,
-        center=plotly.graph_objects.layout.mapbox.Center(
-            lat=45,
-            lon=-73
-        ),
-        pitch=0,
-        zoom=5
-    )
-)
-
-fig.write_html("map.html")
-
-
-
-
-# Started rides by station
-testplot = plotly.graph_objects.Figure(plotly.graph_objects.Bar(x=data["start_station_id"].value_counts().index[:50], y=data["start_station_id"].value_counts()[:50]))
-testplot.write_html("test.html")
-
-len(set(data["start_station_id"]))
