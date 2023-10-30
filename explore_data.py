@@ -191,8 +191,21 @@ median_deltas = (data
     .loc[:,["longitude_delta", "latitude_delta"]]
     .median())
 
-grid_size = (round(median_deltas["longitude_delta"] / 3, 4), round(median_deltas["latitude_delta"] / 3, 4))
+grid_size_multiplier = 0.5
+boundaries = (
+    (round(data["start_lng"].quantile(0.01), 4), round(data["start_lat"].quantile(0.01), 4)),
+    (round(data["start_lng"].quantile(0.99), 4), round(data["start_lat"].quantile(0.99), 4)))
 
+n_squares = (
+    round((boundaries[1][0] - boundaries[0][0]) / median_deltas["longitude_delta"] / grid_size_multiplier),
+    round((boundaries[1][1] - boundaries[0][1]) / median_deltas["latitude_delta"] / grid_size_multiplier))
+
+grid_size = (
+    (boundaries[1][0] - boundaries[0][0]) / n_squares[0],
+    (boundaries[1][1] - boundaries[0][1]) / n_squares[1])
+
+############################## Loop over square boundaries and determine how many start points fall in each
+############################## Avoid plotting some low quantile of squares
 
 
 test_points = data[["start_lng", "start_lat"]][:100]

@@ -1,3 +1,9 @@
+# 2023-10-30
+## Plotting geojson grid
+Using half of median ride distance in each coordinate direction as grid size.
+Use 1st to 99th quantile as the total grid area to discard extreme outliers on each side.
+
+
 # 2023-10-29
 ## Plotting geojson
 Apparently geojson Featurecollection objects can be used directly in plotly.graph_objects.Choroplethmapbox geojson attribute.
