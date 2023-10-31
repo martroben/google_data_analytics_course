@@ -1,3 +1,8 @@
+# 2023-10-31
+## Plotting geojson grid
+Removed cells that have less than 0.01% of started rides.
+
+
 # 2023-10-30
 ## Plotting geojson grid
 Using half of median ride distance in each coordinate direction as grid size.

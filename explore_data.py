@@ -191,60 +191,83 @@ median_deltas = (data
     .loc[:,["longitude_delta", "latitude_delta"]]
     .median())
 
-grid_size_multiplier = 0.5
+cell_size_multiplier = 0.5
 boundaries = (
     (round(data["start_lng"].quantile(0.01), 4), round(data["start_lat"].quantile(0.01), 4)),
     (round(data["start_lng"].quantile(0.99), 4), round(data["start_lat"].quantile(0.99), 4)))
 
-n_squares = (
-    round((boundaries[1][0] - boundaries[0][0]) / median_deltas["longitude_delta"] / grid_size_multiplier),
-    round((boundaries[1][1] - boundaries[0][1]) / median_deltas["latitude_delta"] / grid_size_multiplier))
+n_cells = (
+    round((boundaries[1][0] - boundaries[0][0]) / median_deltas["longitude_delta"] / cell_size_multiplier),
+    round((boundaries[1][1] - boundaries[0][1]) / median_deltas["latitude_delta"] / cell_size_multiplier))
 
-grid_size = (
-    (boundaries[1][0] - boundaries[0][0]) / n_squares[0],
-    (boundaries[1][1] - boundaries[0][1]) / n_squares[1])
+cell_size = (
+    (boundaries[1][0] - boundaries[0][0]) / n_cells[0],
+    (boundaries[1][1] - boundaries[0][1]) / n_cells[1])
 
-############################## Loop over square boundaries and determine how many start points fall in each
-############################## Avoid plotting some low quantile of squares
+origin_longitudes = [boundaries[0][0] + cell_size[0] * i for i in range(n_cells[0])]
+origin_latitudes = [boundaries[0][1] + cell_size[1] * i for i in range(n_cells[1])]
+origins = [(i, j) for i in origin_longitudes for j in origin_latitudes]
 
-
-test_points = data[["start_lng", "start_lat"]][:100]
-test_points["row_column"] = list(range(100))
-test_points["ride_duration"] = 10
-
-geojson_features = list()
-for i, row in test_points.iterrows():
+def get_geojson_polygon(origin: tuple[float, float], width_deg: float, height_deg: float) -> geojson.Polygon:
     geojson_polygon = geojson.Polygon([[
-        (row["start_lng"], row["start_lat"]),
-        (row["start_lng"] + 0.01, row["start_lat"]),
-        (row["start_lng"] + 0.01, row["start_lat"] + 0.01),
-        (row["start_lng"], row["start_lat"] + 0.01),
-        (row["start_lng"], row["start_lat"])]])
-    geojson_feature = geojson.Feature(
-        geometry=geojson_polygon,
-        properties={"row_column": row["row_column"]})
-    geojson_features += [geojson_feature]
+        origin,
+        (origin[0] + width_deg, origin[1]),
+        (origin[0] + width_deg, origin[1] + height_deg),
+        (origin[0], origin[1] + height_deg),
+        origin]])
+    return geojson_polygon
 
-geojson_featurecollection = geojson.FeatureCollection(geojson_features)
+cells = map(
+    get_geojson_polygon,
+    origins,
+    len(origins) * [cell_size[0]],
+    len(origins) * [cell_size[1]])
+
+geojson_featurecollection_raw = geojson.FeatureCollection([])
+for i, cell in tqdm.tqdm(enumerate(cells), total = len(origins)):
+    longitude_min = cell["coordinates"][0][0][0]
+    longitude_max = cell["coordinates"][0][2][0]
+    latitude_min = cell["coordinates"][0][0][1]
+    latitude_max = cell["coordinates"][0][2][1]
+
+    n_started_rides = (
+        data
+            .query("start_lng >= @longitude_min & start_lng < @longitude_max & start_lat >= @latitude_min & start_lat < @latitude_max")
+            .shape[0])
+    
+    geojson_feature = geojson.Feature(
+        id=i,
+        geometry=cell,
+        properties={"n_started_rides": n_started_rides})
+    
+    geojson_featurecollection_raw["features"] += [geojson_feature]
+
+geojson_featurecollection = geojson.FeatureCollection([feature for feature in geojson_featurecollection_raw["features"]])
+
+n_rides_lower_cutoff = 0.0001 * data.shape[0]
+started_rides = {feature["id"]: feature["properties"]["n_started_rides"] for feature in geojson_featurecollection["features"]
+                 if feature["properties"]["n_started_rides"] > n_rides_lower_cutoff}
 
 fig = plotly.graph_objects.Figure(
     plotly.graph_objects.Choroplethmapbox(
         geojson=geojson_featurecollection,
-        locations=test_points.row_column,
-        featureidkey="properties.row_column",
-        z=test_points.ride_duration,
+        locations=list(started_rides.keys()),
+        # featureidkey="properties.row_column",
+        z=list(started_rides.values()),
         colorscale="Viridis",
-        zmin=0,
-        zmax=12,
+        # zmin=0,
+        # zmax=12,
         marker_opacity=0.5,
         marker_line_width=0))
 
-fig.update_layout(
+map_initial_zoom = int((boundaries[1][1] - boundaries[0][1]) / 0.023)
+
+fig = fig.update_layout(
     mapbox_style="carto-positron",
-    mapbox_zoom=8,
-    mapbox_center = {"lat": 42.012, "lon": -87.665})
+    mapbox_zoom=map_initial_zoom,
+    mapbox_center = {
+        # Position based on grid center
+        "lon": (boundaries[0][0] + boundaries[1][0]) / 2,
+        "lat": (boundaries[0][1] + boundaries[1][1]) / 2})
 
-fig.write_html("map.html")
-
-
-
+fig.write_html("started_rides_map.html")
