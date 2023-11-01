@@ -1,3 +1,7 @@
+# 2023-11-01
+nan values can't be stored as properties in geojson feature. Using None instead.
+
+
 # 2023-10-31
 ## Plotting geojson grid
 Removed cells that have less than 0.01% of started rides.

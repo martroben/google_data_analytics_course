@@ -182,7 +182,7 @@ simulation_figure = plotly.graph_objects.Figure()
 simulation_histogram = plotly.graph_objects.Histogram(x=ride_duration_simulation_differences)
 simulation_figure.add_trace(simulation_histogram)
 
-simulation_figure.write_html("ride_duration_simulation.html")
+simulation_figure = simulation_figure.write_html("ride_duration_simulation.html")
 
 
 # Map grid
@@ -223,37 +223,54 @@ cells = map(
     len(origins) * [cell_size[0]],
     len(origins) * [cell_size[1]])
 
-geojson_featurecollection_raw = geojson.FeatureCollection([])
+geojson_featurecollection = geojson.FeatureCollection([])
 for i, cell in tqdm.tqdm(enumerate(cells), total = len(origins)):
     longitude_min = cell["coordinates"][0][0][0]
     longitude_max = cell["coordinates"][0][2][0]
     latitude_min = cell["coordinates"][0][0][1]
     latitude_max = cell["coordinates"][0][2][1]
 
-    n_started_rides = (
-        data
-            .query("start_lng >= @longitude_min & start_lng < @longitude_max & start_lat >= @latitude_min & start_lat < @latitude_max")
-            .shape[0])
+    cell_data = data.query(
+         "start_lng >= @longitude_min & start_lng < @longitude_max & start_lat >= @latitude_min & start_lat < @latitude_max")
+    
+    n_started_rides = cell_data.shape[0]
+    # Use None to avoid nan values which can't be stored as geojson properties
+    median_ride_distance = cell_data["direct_distance_km"].median() if cell_data.shape[0] > 0 else None
+    cell_electric_rides = cell_data.query("rideable_type == 'electric_bike'")
+    n_electric_rides = cell_electric_rides.shape[0]
     
     geojson_feature = geojson.Feature(
         id=i,
         geometry=cell,
-        properties={"n_started_rides": n_started_rides})
+        properties={
+            "n_started_rides": n_started_rides,
+            "median_ride_distance": median_ride_distance,
+            "n_electric_rides": n_electric_rides})
     
-    geojson_featurecollection_raw["features"] += [geojson_feature]
+    geojson_featurecollection["features"] += [geojson_feature]
 
-geojson_featurecollection = geojson.FeatureCollection([feature for feature in geojson_featurecollection_raw["features"]])
+n_started_rides_lower_cutoff = 0.0001 * data.shape[0]
+n_started_rides = {feature["id"]: feature["properties"]["n_started_rides"] for feature in geojson_featurecollection["features"]
+                   if feature["properties"]["n_started_rides"] > n_started_rides_lower_cutoff}
 
-n_rides_lower_cutoff = 0.0001 * data.shape[0]
-started_rides = {feature["id"]: feature["properties"]["n_started_rides"] for feature in geojson_featurecollection["features"]
-                 if feature["properties"]["n_started_rides"] > n_rides_lower_cutoff}
+median_ride_distances = {feature["id"]: feature["properties"]["median_ride_distance"] for feature in geojson_featurecollection["features"]}
+
+n_electric_rides_lower_cutoff = 0.0001 * data.query("rideable_type == 'electric_bike'").shape[0]
+n_electric_rides = {feature["id"]: feature["properties"]["n_electric_rides"] for feature in geojson_featurecollection["features"]
+                    if feature["properties"]["n_electric_rides"] > n_electric_rides_lower_cutoff}
+
+
+#################################################################
+# Plot ride distances and electric bike rides
+# Should probably use proportion of electric rides instead
+# Determine in which cells the ranks of ride distances and proportion of electric rides differ the most
 
 fig = plotly.graph_objects.Figure(
     plotly.graph_objects.Choroplethmapbox(
         geojson=geojson_featurecollection,
-        locations=list(started_rides.keys()),
+        locations=list(n_started_rides.keys()),
         # featureidkey="properties.row_column",
-        z=list(started_rides.values()),
+        z=list(n_started_rides.values()),
         colorscale="Viridis",
         # zmin=0,
         # zmax=12,
