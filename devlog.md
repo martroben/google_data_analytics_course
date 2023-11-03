@@ -1,3 +1,17 @@
+# 2023-11-04
+HTML boxes can be used to add notes/glossary.
+
+For some reason x axis title appears on top and in the bottom after setting it to appear in the bottom.
+Will use plot title instead of axis title for now.
+
+Hid the redundant legends with showlegend=False in trace creation.
+
+Jupyter plan:
+2. Plot duration pdf-s
+3. Analyse distribution difference
+4. Bootstrap the effect
+
+
 # 2023-11-01
 nan values can't be stored as properties in geojson feature. Using None instead.
 
