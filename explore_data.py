@@ -64,16 +64,20 @@ data["direct_speed_m_s"] = [round(x, 2) for x in data["direct_distance_km"] * 10
 # Ride duration analysis #
 ##########################
 
+# Separate data to subscribed riders (members) and one off riders (casual)
 ride_duration_members_raw = data.query("member_casual == 'member'")["duration_minutes"]
 ride_duration_casual_raw = data.query("member_casual == 'casual'")["duration_minutes"]
 
-
-# Plot probability density functions (PDFs) with proposed cutoffs
+upper_cutoff_proportion = 0.01      # Proportion of outliers to discard
 lower_cutoff = 0
-upper_cutoff = max(ride_duration_members_raw.quantile(0.99), ride_duration_casual_raw.quantile(0.99))
+
+upper_cutoff = max(
+    ride_duration_members_raw.quantile(1 - upper_cutoff_proportion),
+    ride_duration_casual_raw.quantile(1 - upper_cutoff_proportion))
 ride_duration_members_cutoffs = (lower_cutoff, upper_cutoff)
 ride_duration_casual_cutoffs = (lower_cutoff, upper_cutoff)
 
+# Plot the raw PDFs
 pdf_raw_figure = plotly.subplots.make_subplots(
     rows=2,
     cols=1,
