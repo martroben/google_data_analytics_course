@@ -1,8 +1,13 @@
+# 2023-11-05
+Could also calculate the effect size for casual -> member conversion. E.g. run simulations by month and normalize by monthly standard deviation.
+#idea
+
 # 2023-11-04
 HTML boxes can be used to add notes/glossary.
 
 For some reason x axis title appears on top and in the bottom after setting it to appear in the bottom.
 Will use plot title instead of axis title for now.
+A shared title can be defined by x_title in plotly.subplots.make_subplots - appears bottom center by default
 
 Hid the redundant legends with showlegend=False in trace creation.
 

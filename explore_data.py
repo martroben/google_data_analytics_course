@@ -170,13 +170,13 @@ ride_duration_p_value = ride_duration_mann_whitney_u_test[1]
 # Bootstrap to simulate change in ride duration if 10% more users are members
 conversion_rate = 0.1
 n_new_members_converted = int(conversion_rate * len(ride_duration_members))
-ride_duration_actual_total = ride_duration_members_raw.sum() + ride_duration_casual_raw.sum()
+ride_duration_actual_total = ride_duration_members.sum() + ride_duration_casual.sum()
 
 n_bootstraps = 1000
 ride_duration_simulated_totals = list()
 for _ in tqdm.tqdm(range(n_bootstraps)):
-    ride_duration_members_simulated = pandas.concat([ride_duration_members_raw, ride_duration_members_raw.sample(n_new_members_converted, replace=True)])
-    ride_duration_casual_simulated = ride_duration_casual_raw.sample(len(ride_duration_casual_raw) - n_new_members_converted)
+    ride_duration_members_simulated = pandas.concat([ride_duration_members, ride_duration_members.sample(n_new_members_converted, replace=True)])
+    ride_duration_casual_simulated = ride_duration_casual.sample(len(ride_duration_casual) - n_new_members_converted)
     ride_duration_simulated_total = ride_duration_members_simulated.sum() + ride_duration_casual_simulated.sum()
     ride_duration_simulated_totals += [ride_duration_simulated_total]
 
@@ -184,9 +184,9 @@ ride_duration_simulation_differences = ride_duration_simulated_totals - ride_dur
 
 simulation_figure = plotly.graph_objects.Figure()
 simulation_histogram = plotly.graph_objects.Histogram(x=ride_duration_simulation_differences)
-simulation_figure.add_trace(simulation_histogram)
+simulation_figure = simulation_figure.add_trace(simulation_histogram)
 
-simulation_figure = simulation_figure.write_html("ride_duration_simulation.html")
+simulation_figure.write_html("ride_duration_simulation.html")
 
 
 # Map grid
