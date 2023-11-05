@@ -1,4 +1,9 @@
 # 2023-11-05
+To publish, click share and make publicly available - will be available after notebook has run. Takes time.
+Kaggle doesn't like @ characters in pandas .query. Replacing with f-string.
+
+Kaggle account needs to be phone verified to get the "internet on" option under Notebook options.
+
 Could also calculate the effect size for casual -> member conversion. E.g. run simulations by month and normalize by monthly standard deviation.
 #idea
 
