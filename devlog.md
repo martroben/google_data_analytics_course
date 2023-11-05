@@ -2,6 +2,11 @@
 Could also calculate the effect size for casual -> member conversion. E.g. run simulations by month and normalize by monthly standard deviation.
 #idea
 
+Try to make the plotly grid map higher (more square-shaped). Can use the height parameter in update_layout.
+
+No point to make cutoffs by number of electric bike rides, because that will remove cells that have longest ride distances and no electric bikes.
+
+
 # 2023-11-04
 HTML boxes can be used to add notes/glossary.
 

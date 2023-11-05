@@ -190,6 +190,7 @@ simulation_figure.write_html("ride_duration_simulation.html")
 
 
 # Map grid
+# Create grid such that cell size would be half of median ride distance
 median_deltas = (data
     .query("longitude_delta > 0 & latitude_delta > 0")
     .loc[:,["longitude_delta", "latitude_delta"]]
@@ -228,7 +229,7 @@ cells = map(
     len(origins) * [cell_size[1]])
 
 geojson_featurecollection = geojson.FeatureCollection([])
-for i, cell in tqdm.tqdm(enumerate(cells), total = len(origins)):
+for i, cell in tqdm.tqdm(enumerate(cells), desc="Calculating map cell values", total=len(origins)):
     longitude_min = cell["coordinates"][0][0][0]
     longitude_max = cell["coordinates"][0][2][0]
     latitude_min = cell["coordinates"][0][0][1]
@@ -247,48 +248,101 @@ for i, cell in tqdm.tqdm(enumerate(cells), total = len(origins)):
         id=i,
         geometry=cell,
         properties={
+            "median_ride_distance_km": median_ride_distance,
             "n_started_rides": n_started_rides,
-            "median_ride_distance": median_ride_distance,
-            "n_electric_rides": n_electric_rides})
+            "n_electric_rides": n_electric_rides,
+            # Give None value if cell doesn't have any starting rides
+            "proportion_electric_rides": n_electric_rides / n_started_rides if n_started_rides > 0 else None})
     
     geojson_featurecollection["features"] += [geojson_feature]
 
-n_started_rides_lower_cutoff = 0.0001 * data.shape[0]
-n_started_rides = {feature["id"]: feature["properties"]["n_started_rides"] for feature in geojson_featurecollection["features"]
-                   if feature["properties"]["n_started_rides"] > n_started_rides_lower_cutoff}
+# Discard cells with unrepresentative number of started rides
+cell_started_rides_lower_cutoff = 0.0001 * data.shape[0]
+cell_started_rides = {feature["id"]: feature["properties"]["n_started_rides"] for feature in geojson_featurecollection["features"]
+                      if feature["properties"]["n_started_rides"] > cell_started_rides_lower_cutoff}
 
-median_ride_distances = {feature["id"]: feature["properties"]["median_ride_distance"] for feature in geojson_featurecollection["features"]}
+cell_ride_distances = {feature["id"]: feature["properties"]["median_ride_distance_km"] for feature in geojson_featurecollection["features"]
+                       if feature["properties"]["n_started_rides"] > cell_started_rides_lower_cutoff}
 
-n_electric_rides_lower_cutoff = 0.0001 * data.query("rideable_type == 'electric_bike'").shape[0]
-n_electric_rides = {feature["id"]: feature["properties"]["n_electric_rides"] for feature in geojson_featurecollection["features"]
-                    if feature["properties"]["n_electric_rides"] > n_electric_rides_lower_cutoff}
+cell_electric_ride_proportion = {feature["id"]: feature["properties"]["proportion_electric_rides"] for feature in geojson_featurecollection["features"]
+                       if feature["properties"]["n_started_rides"] > cell_started_rides_lower_cutoff}
 
 
-#################################################################
-# Plot ride distances and electric bike rides
-# Should probably use proportion of electric rides instead
-# Determine in which cells the ranks of ride distances and proportion of electric rides differ the most
+# Plotting
+map_initial_zoom = int((boundaries[1][1] - boundaries[0][1]) / 0.023)
+map_height = 800
+map_start_position = {
+    # Position based on grid center
+    "lon": (boundaries[0][0] + boundaries[1][0]) / 2,
+    "lat": (boundaries[0][1] + boundaries[1][1]) / 2}
 
-fig = plotly.graph_objects.Figure(
+# Ride distances plot
+cell_ride_distances_figure = plotly.graph_objects.Figure(
     plotly.graph_objects.Choroplethmapbox(
         geojson=geojson_featurecollection,
-        locations=list(n_started_rides.keys()),
+        locations=list(cell_ride_distances.keys()),
         # featureidkey="properties.row_column",
-        z=list(n_started_rides.values()),
+        z=list(cell_ride_distances.values()),
         colorscale="Viridis",
         # zmin=0,
         # zmax=12,
         marker_opacity=0.5,
         marker_line_width=0))
 
-map_initial_zoom = int((boundaries[1][1] - boundaries[0][1]) / 0.023)
+# Electric rides proportion plot
+cell_electric_rides_figure = plotly.graph_objects.Figure(
+    plotly.graph_objects.Choroplethmapbox(
+        geojson=geojson_featurecollection,
+        locations=list(cell_electric_ride_proportion.keys()),
+        # featureidkey="properties.row_column",
+        z=list(cell_electric_ride_proportion.values()),
+        colorscale="Viridis",
+        # zmin=0,
+        # zmax=12,
+        marker_opacity=0.5,
+        marker_line_width=0))
 
-fig = fig.update_layout(
+cell_ride_distances_figure = cell_ride_distances_figure.update_layout(
+    title="Median ride distance km",
     mapbox_style="carto-positron",
+    height=map_height,
     mapbox_zoom=map_initial_zoom,
-    mapbox_center = {
-        # Position based on grid center
-        "lon": (boundaries[0][0] + boundaries[1][0]) / 2,
-        "lat": (boundaries[0][1] + boundaries[1][1]) / 2})
+    mapbox_center=map_start_position)
 
-fig.write_html("started_rides_map.html")
+cell_electric_rides_figure = cell_electric_rides_figure.update_layout(
+    title="Proportion of electric bike rides",
+    mapbox_style="carto-positron",
+    height=map_height,
+    mapbox_zoom=map_initial_zoom,
+    mapbox_center=map_start_position) 
+
+cell_ride_distances_figure.show()
+cell_electric_rides_figure.show()
+
+
+# Analysis for the need of electric bikes by district
+cell_electric_bikes_needed = {
+    feature["id"]: feature["properties"]["proportion_electric_rides"] / feature["properties"]["median_ride_distance_km"]
+    for feature in geojson_featurecollection["features"]
+    if feature["properties"]["n_started_rides"] > cell_started_rides_lower_cutoff and feature["properties"]["proportion_electric_rides"] != 0}
+
+# Electric bikes needed plot
+cell_electric_bikes_needed_figure = plotly.graph_objects.Figure(
+    plotly.graph_objects.Choroplethmapbox(
+        geojson=geojson_featurecollection,
+        locations=list(cell_electric_bikes_needed.keys()),
+        z=list(cell_electric_bikes_needed.values()),
+        colorscale="Viridis",
+        # zmin=0,
+        # zmax=12,
+        marker_opacity=0.5,
+        marker_line_width=0))
+
+cell_electric_bikes_needed_figure = cell_electric_bikes_needed_figure.update_layout(
+    title="Median ride distance / electric ride proportion",
+    mapbox_style="carto-positron",
+    height=map_height,
+    mapbox_zoom=map_initial_zoom,
+    mapbox_center=map_start_position)
+
+cell_electric_bikes_needed_figure.show()
